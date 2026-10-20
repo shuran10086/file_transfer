@@ -1,0 +1,62 @@
+{
+  "callback_api_base": {
+    "description": "NapCat 访问地址",
+    "type": "string",
+    "hint": "URL 模式发送文件用。同一 docker 网络填 http://<容器IP>:6185；NapCat 在宿主机则填 http://<宿主机IP>:6185。留空则改用路径映射模式。",
+    "default": "http://0.0.0.0:6185"
+  },
+  "napcat_path_mapping": {
+    "description": "路径映射规则",
+    "type": "string",
+    "hint": "格式：AstrBot路径:NapCat路径，例如 /test:/napcat/test。仅当 NapCat 与 AstrBot 共享同一目录时使用。",
+    "default": ""
+  },
+  "auto_save": {
+    "description": "自动保存收到的文件",
+    "type": "bool",
+    "hint": "开启后把收到的文件保存到插件数据目录。",
+    "default": true
+  },
+  "max_view_chars": {
+    "description": "查看文件最大字符数",
+    "type": "int",
+    "hint": "查看文件时最多显示的字符数。",
+    "default": 1500
+  },
+  "private_only": {
+    "description": "仅私聊收发",
+    "type": "bool",
+    "hint": "开启后只有私聊可以收发文件，群聊一律拒绝。",
+    "default": false
+  },
+  "whitelist_enable": {
+    "description": "白名单模式",
+    "type": "bool",
+    "hint": "开启后仅收发白名单内的群和用户的文件。",
+    "default": false
+  },
+  "whitelist_groups": {
+    "description": "群号白名单",
+    "type": "list",
+    "hint": "每行一个群号。白名单模式开启后，仅这些群可以收发文件。",
+    "default": []
+  },
+  "whitelist_users": {
+    "description": "QQ 号白名单",
+    "type": "list",
+    "hint": "每行一个 QQ。白名单模式开启后，仅这些用户可以私聊收发文件。",
+    "default": []
+  },
+  "auto_clean": {
+    "description": "自动清理收到的文件",
+    "type": "bool",
+    "hint": "开启后按下方间隔，自动删除 received 目录里超过时限的文件。",
+    "default": false
+  },
+  "clean_interval_hours": {
+    "description": "自动清理间隔（小时）",
+    "type": "int",
+    "hint": "文件保存超过这个时长后会被自动删除，默认 1 小时。",
+    "default": 1
+  }
+}

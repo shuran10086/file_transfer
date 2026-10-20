@@ -1,0 +1,6 @@
+name: file_transfer
+display_name: 文件收发工具
+version: 1.2.0
+author: shuran
+desc: 把本地文件发到 QQ 会话，自动保存收到的文件并查看内容；支持仅私聊收发、群/QQ 白名单、/删除文件
+repo: ""

@@ -83,12 +83,6 @@
     "hint": "接收目录允许占用的最大存储空间，超过后自动跳过新文件，默认 10MB。",
     "default": 10
   },
-  "view_restrict_to_received": {
-    "description": "查看文件限制在接收目录",
-    "type": "bool",
-    "hint": "开启后 /查看文件 按路径只能查看接收目录内的文件，防止读取主机任意文件。默认开启。",
-    "default": true
-  },
   "send_restrict_paths": {
     "description": "限制发送目录",
     "type": "bool",

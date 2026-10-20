@@ -32,7 +32,7 @@ TEXT_SNIFF_BYTES = 4096
     "file_transfer",
     "shuran",
     "文件收发工具：把本地文件发到 QQ 会话，自动保存收到的文件并查看内容",
-    "1.3.0",
+    "1.3.2",
 )
 class FileTransferPlugin(Star):
     def __init__(self, context: Context, config=None):
@@ -143,10 +143,6 @@ class FileTransferPlugin(Star):
     @property
     def max_storage_bytes(self) -> int:
         return self.max_storage_mb * 1024 * 1024
-
-    @property
-    def view_restrict_to_received(self) -> bool:
-        return bool(self.config.get("view_restrict_to_received", True))
 
     @property
     def send_restrict_paths(self) -> bool:
@@ -543,24 +539,22 @@ class FileTransferPlugin(Star):
             yield event.chain_result([Plain(self._render_file(Path(rec["path"])))])
             return
 
-        path = Path(raw).expanduser()
-        if not path.is_absolute():
-            path = Path.cwd() / path
-        # 敏感目录防护（始终生效）
-        if self._is_sensitive_path(path):
-            yield event.chain_result([Plain("这个路径不允许查看哦")])
+        # 非数字输入：在接收目录里按文件名查找，命中则显示并提示对应序号
+        target_name = os.path.basename(raw)
+        hit_idx = None
+        for i, rec in enumerate(self.received_files):
+            if rec.get("name") == target_name:
+                hit_idx = i
+                break
+        if hit_idx is not None:
+            rec = self.received_files[hit_idx]
+            content = self._render_file(Path(rec["path"]))
+            tip = f"（第 {hit_idx + 1} 个，可用 /查看文件 {hit_idx + 1} 查看）"
+            yield event.chain_result([Plain(tip + chr(10) + content)])
             return
-        # 目录限制：默认只能查看接收目录内的文件
-        if self.view_restrict_to_received and not self._is_within(path, self.received_dir):
-            yield event.chain_result([Plain("已限制只能查看接收目录内的文件")])
-            return
-        if not path.exists():
-            yield event.chain_result([Plain(f"找不到这个文件：{path}")])
-            return
-        if path.is_dir():
-            yield event.chain_result([Plain(f"这是一个目录：{path}")])
-            return
-        yield event.chain_result([Plain(self._render_file(path))])
+        yield event.chain_result(
+            [Plain(f"接收目录里没有「{target_name}」，用 /文件列表 看序号，再 /查看文件 <序号> 查看")]
+        )
 
     @filter.command("文件列表", alias={"filelist"})
     async def on_file_list(self, event: AstrMessageEvent):

@@ -1,7 +1,4 @@
-"""
-文件收发工具
-作者：shuran
-邮箱：2556246092@qq.com
+"""文件收发工具
 
 功能：
 1. /发文件 <路径>  把本地文件发送到当前会话（URL 模式 / 路径映射模式）
@@ -11,6 +8,8 @@
 5. /删除文件 <文件名>  删除 received 目录里已收到的文件
 6. 权限控制        仅私聊收发 / 群号与 QQ 白名单
 7. 自动清理        按设定间隔自动删除 received 目录里超期的文件
+8. 后缀过滤        默认拦截可执行 / 脚本文件，可自定义后缀黑名单
+9. 容量限制        限制接收文件数量与总存储大小，超限自动跳过
 """
 
 import asyncio
@@ -33,7 +32,7 @@ TEXT_SNIFF_BYTES = 4096
     "file_transfer",
     "shuran",
     "文件收发工具：把本地文件发到 QQ 会话，自动保存收到的文件并查看内容",
-    "1.1.0",
+    "1.3.0",
 )
 class FileTransferPlugin(Star):
     def __init__(self, context: Context, config=None):
@@ -108,6 +107,61 @@ class FileTransferPlugin(Star):
         except (TypeError, ValueError):
             val = 1.0
         return val if val > 0 else 1.0
+
+    @property
+    def suffix_filter_enable(self) -> bool:
+        return bool(self.config.get("suffix_filter_enable", True))
+
+    @property
+    def blocked_suffixes(self) -> set:
+        result = set()
+        for x in (self.config.get("blocked_suffixes") or []):
+            s = str(x).strip().lower()
+            if not s:
+                continue
+            if not s.startswith("."):
+                s = "." + s
+            result.add(s)
+        return result
+
+    @property
+    def max_file_count(self) -> int:
+        try:
+            val = int(self.config.get("max_file_count", 10))
+        except (TypeError, ValueError):
+            val = 10
+        return val if val > 0 else 10
+
+    @property
+    def max_storage_mb(self) -> int:
+        try:
+            val = int(self.config.get("max_storage_mb", 10))
+        except (TypeError, ValueError):
+            val = 10
+        return val if val > 0 else 10
+
+    @property
+    def max_storage_bytes(self) -> int:
+        return self.max_storage_mb * 1024 * 1024
+
+    @property
+    def view_restrict_to_received(self) -> bool:
+        return bool(self.config.get("view_restrict_to_received", True))
+
+    @property
+    def send_restrict_paths(self) -> bool:
+        return bool(self.config.get("send_restrict_paths", False))
+
+    @property
+    def allowed_send_dirs(self) -> list:
+        dirs = []
+        for x in (self.config.get("allowed_send_dirs") or []):
+            s = str(x).strip()
+            if s:
+                dirs.append(s)
+        # 接收目录始终允许发送
+        dirs.append(str(self.received_dir))
+        return dirs
 
     # ---------------- 权限控制 ----------------
 
@@ -210,6 +264,52 @@ class FileTransferPlugin(Star):
         self._save_records()
         logger.info(f"[file_transfer] 自动清理删除 {len(removed)} 个文件：{removed}")
 
+    def _dir_total_size(self) -> int:
+        """统计 received 目录当前占用的总字节数。"""
+        total = 0
+        try:
+            for p in self.received_dir.iterdir():
+                if p.is_file():
+                    try:
+                        total += p.stat().st_size
+                    except Exception:
+                        pass
+        except Exception as e:
+            logger.warning(f"[file_transfer] 统计目录大小失败：{e}")
+        return total
+
+    def _is_sensitive_path(self, path: Path) -> bool:
+        """判断路径是否落在系统 / 用户敏感目录下，防止读取或外发密钥、配置等。"""
+        try:
+            resolved = Path(path).resolve()
+        except Exception:
+            resolved = path
+        home = Path.home()
+        candidates = [
+            "/etc", "/proc", "/sys", "/boot", "/dev",
+            "/var/log", "/root/.ssh",
+            str(home / ".ssh"), str(home / ".aws"),
+            str(home / ".gnupg"), str(home / ".config"),
+        ]
+        for s in candidates:
+            try:
+                sp = Path(s).resolve()
+            except Exception:
+                sp = Path(s)
+            if resolved == sp or str(resolved).startswith(str(sp) + os.sep):
+                return True
+        return False
+
+    @staticmethod
+    def _is_within(path: Path, base: Path) -> bool:
+        """判断 path 是否位于 base 目录内（含自身）。"""
+        try:
+            rp = Path(path).resolve()
+            rb = Path(base).resolve()
+        except Exception:
+            return False
+        return rp == rb or str(rp).startswith(str(rb) + os.sep)
+
     async def terminate(self):
         if self._clean_task:
             self._clean_task.cancel()
@@ -251,6 +351,38 @@ class FileTransferPlugin(Star):
         if not url:
             logger.info("[file_transfer] 文件段没有可下载的 URL，跳过")
             return
+
+        is_private = not event.get_group_id()
+
+        async def _notify(text: str):
+            # 仅私聊提醒，群聊静默跳过，避免刷屏
+            if not is_private:
+                return
+            try:
+                await event.send(event.chain_result([Plain(text)]))
+            except Exception:
+                pass
+
+        # 1) 后缀过滤：命中黑名单直接拦截，不下载
+        if self.suffix_filter_enable:
+            suffix = os.path.splitext(name)[1].lower()
+            if suffix and suffix in self.blocked_suffixes:
+                logger.info(f"[file_transfer] 后缀被过滤：{name}")
+                await _notify(f"已过滤文件：{name}（{suffix} 类型不允许接收）")
+                return
+
+        # 2) 数量上限：达到上限则跳过
+        if len(self.received_files) >= self.max_file_count:
+            logger.info("[file_transfer] 文件数量已达上限，跳过")
+            await _notify(f"文件池已满（上限 {self.max_file_count} 个），已跳过：{name}")
+            return
+
+        # 3) 存储上限：下载前预检当前占用
+        if self._dir_total_size() >= self.max_storage_bytes:
+            logger.info("[file_transfer] 存储已达上限，跳过")
+            await _notify(f"存储已满（上限 {self.max_storage_mb}MB），已跳过：{name}")
+            return
+
         safe_name = os.path.basename(name) or f"file_{int(time.time())}"
         target = self.received_dir / safe_name
         if target.exists():
@@ -262,6 +394,16 @@ class FileTransferPlugin(Star):
             logger.warning(f"[file_transfer] 下载文件失败 {url}: {e}")
             return
         if not target.exists():
+            return
+
+        # 3b) 存储上限：下载后复核，超限则删除刚下载的文件
+        if self._dir_total_size() > self.max_storage_bytes:
+            try:
+                target.unlink()
+            except Exception:
+                pass
+            logger.info("[file_transfer] 下载后超出存储上限，已删除")
+            await _notify(f"存储已满（上限 {self.max_storage_mb}MB），已跳过：{name}")
             return
         try:
             sender = event.get_sender_name()
@@ -311,6 +453,16 @@ class FileTransferPlugin(Star):
         if not path.is_file():
             yield event.chain_result([Plain(f"这不是一个文件：{path}")])
             return
+
+        # 敏感目录防护（始终生效）
+        if self._is_sensitive_path(path):
+            yield event.chain_result([Plain("这个路径不允许发送哦")])
+            return
+        # 目录白名单（可选开启）：仅允许发送指定目录内的文件
+        if self.send_restrict_paths:
+            if not any(self._is_within(path, Path(d)) for d in self.allowed_send_dirs):
+                yield event.chain_result([Plain("该文件不在允许发送的目录范围内")])
+                return
 
         name = path.name
         size = self._fmt_size(path.stat().st_size)
@@ -363,6 +515,10 @@ class FileTransferPlugin(Star):
 
     @filter.command("查看文件", alias={"catfile"})
     async def on_view_file(self, event: AstrMessageEvent):
+        allowed, reason = self._check_access(event)
+        if not allowed:
+            yield event.chain_result([Plain(reason)])
+            return
         parts = event.message_str.strip().split(maxsplit=1)
         raw = parts[1].strip() if len(parts) > 1 else ""
         raw = raw.strip().strip('"').strip("'")
@@ -390,6 +546,14 @@ class FileTransferPlugin(Star):
         path = Path(raw).expanduser()
         if not path.is_absolute():
             path = Path.cwd() / path
+        # 敏感目录防护（始终生效）
+        if self._is_sensitive_path(path):
+            yield event.chain_result([Plain("这个路径不允许查看哦")])
+            return
+        # 目录限制：默认只能查看接收目录内的文件
+        if self.view_restrict_to_received and not self._is_within(path, self.received_dir):
+            yield event.chain_result([Plain("已限制只能查看接收目录内的文件")])
+            return
         if not path.exists():
             yield event.chain_result([Plain(f"找不到这个文件：{path}")])
             return
@@ -400,6 +564,10 @@ class FileTransferPlugin(Star):
 
     @filter.command("文件列表", alias={"filelist"})
     async def on_file_list(self, event: AstrMessageEvent):
+        allowed, reason = self._check_access(event)
+        if not allowed:
+            yield event.chain_result([Plain(reason)])
+            return
         if not self.received_files:
             yield event.chain_result([Plain("还没有收到过文件呢")])
             return

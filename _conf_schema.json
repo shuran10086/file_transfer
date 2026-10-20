@@ -58,5 +58,47 @@
     "type": "int",
     "hint": "文件保存超过这个时长后会被自动删除，默认 1 小时。",
     "default": 1
+  },
+  "suffix_filter_enable": {
+    "description": "后缀过滤",
+    "type": "bool",
+    "hint": "开启后拦截下方黑名单里的文件后缀，命中的文件不会被接收。",
+    "default": true
+  },
+  "blocked_suffixes": {
+    "description": "拦截后缀黑名单",
+    "type": "list",
+    "hint": "每行一个后缀（可带或不带点）。命中后缀的文件不会被下载保存，默认拦截常见可执行 / 脚本文件。",
+    "default": [".exe", ".py", ".bat", ".cmd", ".sh", ".ps1", ".vbs", ".jar", ".com", ".scr", ".msi", ".dll", ".apk", ".run", ".app"]
+  },
+  "max_file_count": {
+    "description": "文件数量上限",
+    "type": "int",
+    "hint": "接收目录里最多保留的文件数量，达到后自动跳过新文件（自动 / 手动清理前生效），默认 10。",
+    "default": 10
+  },
+  "max_storage_mb": {
+    "description": "存储上限（MB）",
+    "type": "int",
+    "hint": "接收目录允许占用的最大存储空间，超过后自动跳过新文件，默认 10MB。",
+    "default": 10
+  },
+  "view_restrict_to_received": {
+    "description": "查看文件限制在接收目录",
+    "type": "bool",
+    "hint": "开启后 /查看文件 按路径只能查看接收目录内的文件，防止读取主机任意文件。默认开启。",
+    "default": true
+  },
+  "send_restrict_paths": {
+    "description": "限制发送目录",
+    "type": "bool",
+    "hint": "开启后 /发文件 只能发送下方允许目录内的文件。默认关闭。",
+    "default": false
+  },
+  "allowed_send_dirs": {
+    "description": "允许发送的目录",
+    "type": "list",
+    "hint": "每行一个目录。开启「限制发送目录」后，仅这些目录（含子目录）内的文件可被发送；接收目录始终允许。",
+    "default": []
   }
 }

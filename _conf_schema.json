@@ -2,25 +2,31 @@
   "callback_api_base": {
     "description": "NapCat 访问地址",
     "type": "string",
-    "hint": "URL 模式发送文件用。同一 docker 网络填 http://<容器IP>:6185；NapCat 在宿主机则填 http://<宿主机IP>:6185。留空则改用路径映射模式。",
-    "default": "http://0.0.0.0:6185"
+    "hint": "URL 模式发送文件用。同一容器 / 宿主机可填 http://127.0.0.1:6185；NapCat 在另一容器则填 http://<AstrBot容器IP或宿主机IP>:6185。留空则只用路径映射模式。",
+    "default": "http://127.0.0.1:6185"
   },
   "napcat_path_mapping": {
     "description": "路径映射规则",
     "type": "string",
-    "hint": "格式：AstrBot路径:NapCat路径，例如 /test:/napcat/test。仅当 NapCat 与 AstrBot 共享同一目录时使用。",
+    "hint": "格式：AstrBot路径:NapCat路径，例如 /test:/napcat/test；Windows 下可写 D:/astrbot:/napcat；也可用 => 分隔。仅当 NapCat 与 AstrBot 共享同一目录时使用。",
     "default": ""
   },
   "auto_save": {
     "description": "自动保存收到的文件",
     "type": "bool",
-    "hint": "开启后把收到的文件保存到插件数据目录。",
+    "hint": "开启后把收到的文件保存到当前会话工作区（私聊为本人 QQ 工作区，群聊为群共享工作区）。保存成功提示只在私聊发送；被过滤/超限/失败等提示群聊也会发送。",
     "default": true
+  },
+  "auto_save_quoted": {
+    "description": "保存引用消息里的文件",
+    "type": "bool",
+    "hint": "开启后会额外保存引用消息（回复）中的文件。默认关闭，避免反复引用同一条文件消息造成重复下载；同一 URL 10 分钟内只保存一次。",
+    "default": false
   },
   "max_view_chars": {
     "description": "查看文件最大字符数",
     "type": "int",
-    "hint": "查看文件时最多显示的字符数。",
+    "hint": "查看文件时最多显示的字符数（限长读取，不会读取整个文件）。",
     "default": 1500
   },
   "private_only": {
@@ -47,52 +53,87 @@
     "hint": "每行一个 QQ。白名单模式开启后，仅这些用户可以私聊收发文件。",
     "default": []
   },
-  "auto_clean": {
-    "description": "自动清理收到的文件",
-    "type": "bool",
-    "hint": "开启后按下方间隔，自动删除 received 目录里超过时限的文件。",
-    "default": false
-  },
-  "clean_interval_hours": {
-    "description": "自动清理间隔（小时）",
-    "type": "int",
-    "hint": "文件保存超过这个时长后会被自动删除，默认 1 小时。",
-    "default": 1
-  },
   "suffix_filter_enable": {
     "description": "后缀过滤",
     "type": "bool",
-    "hint": "开启后拦截下方黑名单里的文件后缀，命中的文件不会被接收。",
+    "hint": "开启后拦截下方黑名单里的文件后缀，命中的文件不会被接收。文件名会先做清洗（去尾部空格/点等）再判断，避免绕过。",
     "default": true
   },
   "blocked_suffixes": {
     "description": "拦截后缀黑名单",
     "type": "list",
     "hint": "每行一个后缀（可带或不带点）。命中后缀的文件不会被下载保存，默认拦截常见可执行 / 脚本文件。",
-    "default": [".exe", ".py", ".bat", ".cmd", ".sh", ".ps1", ".vbs", ".jar", ".com", ".scr", ".msi", ".dll", ".apk", ".run", ".app"]
+    "default": [
+      ".exe",
+      ".com",
+      ".scr",
+      ".pif",
+      ".bat",
+      ".cmd",
+      ".msi",
+      ".msc",
+      ".cpl",
+      ".dll",
+      ".sys",
+      ".ps1",
+      ".psm1",
+      ".vbs",
+      ".vbe",
+      ".js",
+      ".jse",
+      ".wsf",
+      ".hta",
+      ".py",
+      ".pyw",
+      ".pyd",
+      ".jar",
+      ".run",
+      ".app",
+      ".apk",
+      ".lnk",
+      ".reg"
+    ]
   },
   "max_file_count": {
-    "description": "文件数量上限",
+    "description": "上传文件数量上限",
     "type": "int",
-    "hint": "接收目录里最多保留的文件数量，达到后自动跳过新文件（自动 / 手动清理前生效），默认 10。",
+    "hint": "每个工作区最多保留多少个“经插件接收的文件”（AI 任务脚本、程序产物等不计入）。群聊按群内所有成员上传总数计算。0 表示不限制，默认 10。",
     "default": 10
   },
   "max_storage_mb": {
-    "description": "存储上限（MB）",
+    "description": "上传文件存储上限（MB）",
     "type": "int",
-    "hint": "接收目录允许占用的最大存储空间，超过后自动跳过新文件，默认 10MB。",
+    "hint": "每个工作区中“经插件接收的文件”总大小上限，AI 任务文件不计入；群聊按群内所有成员上传总数计算。0 表示不限制，默认 10MB。",
     "default": 10
   },
-  "send_restrict_paths": {
-    "description": "限制发送目录",
-    "type": "bool",
-    "hint": "开启后 /发文件 只能发送下方允许目录内的文件。默认关闭。",
-    "default": false
+  "max_single_file_mb": {
+    "description": "单个接收文件大小上限（MB）",
+    "type": "int",
+    "hint": "接收的单个文件最大大小，超过会被拒绝且不留残留文件；实际上限还会受工作区剩余上传配额约束。0 表示不限制，默认 50MB。",
+    "default": 50
+  },
+  "max_send_mb": {
+    "description": "发送文件大小上限（MB）",
+    "type": "int",
+    "hint": "/发文件 允许发送的单个文件最大大小，0 表示不限制，默认 100MB。",
+    "default": 100
   },
   "allowed_send_dirs": {
-    "description": "允许发送的目录",
+    "description": "普通用户允许发送的目录",
     "type": "list",
-    "hint": "每行一个目录。开启「限制发送目录」后，仅这些目录（含子目录）内的文件可被发送；接收目录始终允许。",
+    "hint": "每行一个目录。普通用户只能发送当前工作区或这些目录（含子目录）内的文件；AstrBot 管理员可发送任意可读文件，不受此项限制。",
     "default": []
+  },
+  "workspace_auto_clean": {
+    "description": "定时清理工作区文件",
+    "type": "bool",
+    "hint": "开启后按下方保留时长，定时清理所有 QQ 用户/群聊工作区中的超期文件（包含 AI 为完成任务编写的脚本和产物）。不会清理 EXTRA_PROMPT.md、隐藏文件与目录。默认开启，请谨慎设置保留时长。",
+    "default": true
+  },
+  "workspace_clean_interval_hours": {
+    "description": "工作区文件保留时长（小时）",
+    "type": "int",
+    "hint": "工作区文件保存超过这个时长后会被自动清理，单位小时，默认 1 小时。",
+    "default": 1
   }
 }

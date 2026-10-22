@@ -1,6 +1,6 @@
 name: file_transfer
 display_name: 文件收发工具
-version: 1.5.0
+version: 1.5.1
 author: shuran
 desc: 把本地文件发到 QQ 会话，自动保存收到的文件并查看内容；工作区沿用 AstrBot 会话工作区（私聊按 QQ、群聊共享）、定时清理、容量限制与权限控制
 repo: ""

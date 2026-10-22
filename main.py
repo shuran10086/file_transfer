@@ -1,4 +1,4 @@
-"""文件收发工具 v1.5.0
+"""文件收发工具 v1.5.1
 
 功能：
 1. /发文件 <路径>           把本地文件发送到当前会话（URL 模式 / 路径映射模式）
@@ -36,7 +36,7 @@ from astrbot.api.event import AstrMessageEvent, filter
 from astrbot.api.message_components import File, Plain, Reply
 from astrbot.api.star import Context, Star, StarTools
 
-PLUGIN_VERSION = "1.5.0"
+PLUGIN_VERSION = "1.5.1"
 DEFAULT_MAX_VIEW_CHARS = 1500
 TEXT_SNIFF_BYTES = 4096
 URL_DEDUP_TTL = 600
@@ -1195,7 +1195,7 @@ class FileTransferPlugin(Star):
 
     @filter.command("删除文件", alias={"delfile"})
     async def on_delete_file(self, event: AstrMessageEvent):
-        """删除工作区里已有的文件。"""
+        """删除工作区里已有的文件（支持序号或文件名）。"""
         allowed, reason = self._check_access(event)
         if not allowed:
             yield event.chain_result([Plain(reason)])
@@ -1204,16 +1204,13 @@ class FileTransferPlugin(Star):
         raw = self._parse_arg(event)
         if not raw:
             yield event.chain_result(
-                [Plain("用法：/删除文件 <文件名>，例如 /删除文件 test.txt")]
+                [
+                    Plain(
+                        "用法：/删除文件 <序号|文件名>，"
+                        "例如 /删除文件 1 或 /删除文件 test.txt"
+                    )
+                ]
             )
-            return
-
-        safe_name = raw.replace("\\", "/").split("/")[-1].strip()
-        if not safe_name or safe_name in {".", ".."}:
-            yield event.chain_result([Plain("文件名不太对哦")])
-            return
-        if safe_name.lower() in PROTECTED_WORKSPACE_FILES:
-            yield event.chain_result([Plain("该文件受保护，不能删除")])
             return
 
         try:
@@ -1222,10 +1219,35 @@ class FileTransferPlugin(Star):
             yield event.chain_result([Plain("获取工作区失败，请稍后重试")])
             return
 
-        target = ws_dir / safe_name
+        index_hint = ""
+        if raw.isdigit():
+            # 与 /查看文件、/文件列表 使用同一排序（按修改时间升序，序号 1 为最旧）
+            index = int(raw)
+            ws_files = self._sorted_workspace_files(ws_dir)
+            if not ws_files:
+                yield event.chain_result([Plain("工作区里还没有文件呢")])
+                return
+            if index < 1 or index > len(ws_files):
+                yield event.chain_result(
+                    [Plain(f"序号超出范围，当前工作区共 {len(ws_files)} 个文件")]
+                )
+                return
+            target = ws_files[index - 1]
+            index_hint = f"（第 {index} 个）"
+        else:
+            safe_name = raw.replace("\\", "/").split("/")[-1].strip()
+            if not safe_name or safe_name in {".", ".."}:
+                yield event.chain_result([Plain("文件名不太对哦")])
+                return
+            target = ws_dir / safe_name
+
+        if target.name.lower() in PROTECTED_WORKSPACE_FILES:
+            yield event.chain_result([Plain("该文件受保护，不能删除")])
+            return
+
         try:
             if not target.exists() or not target.is_file():
-                yield event.chain_result([Plain(f"没找到这个文件：{safe_name}")])
+                yield event.chain_result([Plain(f"没找到这个文件：{target.name}")])
                 return
             target.unlink()
         except OSError as e:
@@ -1233,9 +1255,9 @@ class FileTransferPlugin(Star):
             yield event.chain_result([Plain("删除失败了，请查看 AstrBot 日志")])
             return
 
-        self._index_remove(ws_dir, safe_name)
+        self._index_remove(ws_dir, target.name)
         logger.info(f"[file_transfer] 已删除文件：{target}")
-        yield event.chain_result([Plain(f"已删除：{safe_name}")])
+        yield event.chain_result([Plain(f"已删除：{target.name}{index_hint}")])
 
     # ---------------- 工具方法 ----------------
 

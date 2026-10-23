@@ -114,7 +114,7 @@ URL 模式发送失败时会自动尝试路径映射模式；两种模式都失�
 5. **清理默认开启**：默认保留 1 小时，会清理工作区内的任务脚本与产物；如不需要请关闭 `workspace_auto_clean` 或调大保留时长。
 6. **配置变更**：删除 `auto_clean`、`clean_interval_hours`、`send_restrict_paths`；新增 `auto_save_quoted`、`max_single_file_mb`、`max_send_mb`；`max_file_count` / `max_storage_mb` 语义改为只统计上传文件。
 7. **1.5.1**：`/删除文件` 新增按序号删除，与 `/文件列表`、`/查看文件 <序号>` 使用同一排序（修改时间升序，1 为最旧）。
-8. **1.5.2**：`/发文件` 新增按序号发送；`/查看文件`、`/发文件`、`/删除文件` 的序号与 `/文件列表` 完全一致。同时按 AstrBot 源码接口核对，`metadata.yaml` 的 `astrbot_version` 由 `>=4.5,<5` 校正为 `>=4.0.0`（所用接口自 v4.0.0 起均存在）。
+8. **1.5.2**：`/发文件` 新增按序号发送；`/查看文件`、`/发文件`、`/删除文件` 的序号与 `/文件列表` 完全一致。同时按 AstrBot 源码接口核对，`metadata.yaml` 的 `astrbot_version` 由 `>=4.5,<5` 校正为 `>=4.0.0`（所用接口自 v4.0.0 起均存在）；并新增 `category: 工具` 与 `tags`，将 AstrBot Cloud 插件市场分类指定为「工具」。
 
 ## 依赖与兼容性
 
@@ -122,6 +122,24 @@ URL 模式发送失败时会自动尝试路径映射模式；两种模式都失�
 - 实际运行验证基于 AstrBot 4.28.1；AstrBot 5.x 尚未发布，按官方插件发布文档示例只声明最低版本、不设上限。
 - 主要面向 **aiocqhttp / NapCat**（OneBot v11）；其他平台不做适配。
 - 兼容旧 AstrBot 时读取管理员名单会回退读取 `data/cmd_config.json` 的 `admins_id`，不写死任何 QQ。
+
+## 插件市场元数据（category / tags）
+
+`metadata.yaml` 中额外声明了插件市场分类与标签：
+
+```yaml
+category: 工具
+tags:
+  - 工具
+  - 文件
+  - 文件传输
+  - 文件管理
+  - QQ
+```
+
+- `category` / `tags` 供 **AstrBot Cloud 插件市场**做分类与搜索使用；AstrBot 运行时加载器只读取已知字段，这两个字段不会影响本地插件加载。
+- 已核对市场接口：发布到 AstrBot Cloud 的插件，其 `metadata.yaml` 的 `category` 字段会被市场收录（部分插件靠审核端手动设置分类）。本插件目标分类为 **工具**。
+- 本地 WebUI 插件详情若显示 `[MISSING: features.extension.market.categories.其他]` 之类的文本，是 AstrBot WebUI 缺少对应中文分类的 i18n 标签导致的显示问题（分类值来自云端为中文）；在云端把分类改为「工具」后，市场分类筛选会变更，但该 MISSING 标签是否消失取决于所用 AstrBot WebUI 版本是否提供对应翻译，与本插件代码无关。
 
 ## 常见问题
 

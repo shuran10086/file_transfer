@@ -4,6 +4,13 @@ version: 1.5.2
 author: shuran
 desc: 把本地文件发到 QQ 会话，自动保存收到的文件并查看内容；工作区沿用 AstrBot 会话工作区（私聊按 QQ、群聊共享）、定时清理、容量限制与权限控制
 repo: ""
+category: 工具
+tags:
+  - 工具
+  - 文件
+  - 文件传输
+  - 文件管理
+  - QQ
 astrbot_version: ">=4.0.0"
 support_platforms:
   - aiocqhttp

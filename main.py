@@ -1,4 +1,4 @@
-"""文件收发工具 v1.5.1
+"""文件收发工具 v1.5.2
 
 功能：
 1. /发文件 <路径>           把本地文件发送到当前会话（URL 模式 / 路径映射模式）
@@ -36,7 +36,7 @@ from astrbot.api.event import AstrMessageEvent, filter
 from astrbot.api.message_components import File, Plain, Reply
 from astrbot.api.star import Context, Star, StarTools
 
-PLUGIN_VERSION = "1.5.1"
+PLUGIN_VERSION = "1.5.2"
 DEFAULT_MAX_VIEW_CHARS = 1500
 TEXT_SNIFF_BYTES = 4096
 URL_DEDUP_TTL = 600
@@ -882,7 +882,12 @@ class FileTransferPlugin(Star):
             raw = ""
         if not raw:
             yield event.chain_result(
-                [Plain("用法：/发文件 <文件路径>，例如 /发文件 /test/1.txt 或工作区内文件名")]
+                [
+                    Plain(
+                        "用法：/发文件 <序号|文件路径>，"
+                        "例如 /发文件 1、/发文件 /test/1.txt 或工作区内文件名"
+                    )
+                ]
             )
             return
 
@@ -892,10 +897,26 @@ class FileTransferPlugin(Star):
             yield event.chain_result([Plain("获取工作区失败，请稍后重试")])
             return
 
-        path = self._resolve_send_path(raw, ws_dir)
-        if path is None:
-            yield event.chain_result([Plain(f"找不到这个文件：{raw}")])
-            return
+        index_hint = ""
+        if raw.isdigit():
+            # 与 /文件列表、/查看文件、/删除文件 使用同一排序（修改时间升序，序号 1 为最旧）
+            index = int(raw)
+            ws_files = self._sorted_workspace_files(ws_dir)
+            if not ws_files:
+                yield event.chain_result([Plain("工作区里还没有文件呢")])
+                return
+            if index < 1 or index > len(ws_files):
+                yield event.chain_result(
+                    [Plain(f"序号超出范围，当前工作区共 {len(ws_files)} 个文件")]
+                )
+                return
+            path = ws_files[index - 1]
+            index_hint = f"（第 {index} 个）"
+        else:
+            path = self._resolve_send_path(raw, ws_dir)
+            if path is None:
+                yield event.chain_result([Plain(f"找不到这个文件：{raw}")])
+                return
 
         try:
             file_size = path.stat().st_size
@@ -927,7 +948,7 @@ class FileTransferPlugin(Star):
                     event.chain_result([File(name=display_name, url=url)])
                 )
                 yield event.chain_result(
-                    [Plain(f"文件已发送：{display_name}（{size_text}）")]
+                    [Plain(f"文件已发送：{display_name}（{size_text}）{index_hint}")]
                 )
                 return
             except Exception as e:  # noqa: BLE001
@@ -952,7 +973,7 @@ class FileTransferPlugin(Star):
             )
             return
         yield event.chain_result(
-            [Plain(f"文件已发送：{display_name}（{size_text}）")]
+            [Plain(f"文件已发送：{display_name}（{size_text}）{index_hint}")]
         )
 
     @staticmethod

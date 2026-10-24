@@ -1,8 +1,8 @@
 name: file_transfer
 display_name: 文件收发工具
-version: 1.5.2
+version: 1.6.0
 author: shuran
-desc: 把本地文件发到 QQ 会话，自动保存收到的文件并查看内容；工作区沿用 AstrBot 会话工作区（私聊按 QQ、群聊共享）、定时清理、容量限制与权限控制
+desc: 把本地文件发到 QQ 会话，自动保存收到的文件并查看内容；支持 NapCat(aiocqhttp) 与 QQ 官方机器人(qq_official)，提供可操作 WebUI 管理页（文件上传/重命名/删除、审计清空、配置修改）、SQLite 索引与哈希去重、操作审计、传输重试/并发/限速、工作区配额与清理
 repo: ""
 category: 工具
 tags:
@@ -11,6 +11,10 @@ tags:
   - 文件传输
   - 文件管理
   - QQ
+  - WebUI
+  - 审计
 astrbot_version: ">=4.0.0"
 support_platforms:
   - aiocqhttp
+  - qq_official
+  - qq_official_webhook

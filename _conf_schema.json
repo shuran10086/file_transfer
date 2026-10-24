@@ -1,68 +1,325 @@
 {
+  "sending": {
+    "description": "发送设置",
+    "type": "object",
+    "hint": "控制 /发文件 的发送方式与大小限制。aiocqhttp/NapCat 使用 URL 模式或路径映射；qq_official 由 QQ 官方接口直接上传本地文件，无需填写 callback_api_base / 路径映射。",
+    "items": {
+      "callback_api_base": {
+        "description": "AstrBot 文件服务地址（NapCat 用）",
+        "type": "string",
+        "hint": "仅 aiocqhttp/NapCat 的 URL 模式需要。填 NapCat 能访问到的 AstrBot dashboard 地址，默认端口 6185。同一容器/宿主机可填 http://127.0.0.1:6185；NapCat 在另一容器或另一台机器时填实际 IP/域名。留空则只用路径映射模式。QQ 官方机器人不使用此项。",
+        "default": "http://127.0.0.1:6185"
+      },
+      "napcat_path_mapping": {
+        "description": "NapCat 路径映射（仅 aiocqhttp）",
+        "type": "string",
+        "hint": "格式：AstrBot路径:NapCat路径，例如 /test:/napcat/test；Windows 下可写 D:/astrbot:/napcat；也可用 => 分隔。仅当 NapCat 与 AstrBot 共享同一目录时使用。QQ 官方机器人不使用此项。",
+        "default": ""
+      },
+      "max_send_mb": {
+        "description": "发送文件大小上限（MB）",
+        "type": "int",
+        "hint": "/发文件 允许发送的单个文件最大大小，0 表示不限制，默认 100MB。QQ 官方机器人平台本身硬限制为 200MB。",
+        "default": 100
+      }
+    }
+  },
+  "receiving": {
+    "description": "接收与查看",
+    "type": "object",
+    "hint": "控制自动接收、引用文件、后缀过滤、单文件大小上限、查看字符数与图片预览。",
+    "items": {
+      "auto_save": {
+        "description": "自动保存收到的文件",
+        "type": "bool",
+        "hint": "开启后把收到的文件保存到当前会话工作区（私聊为本人工作区，群聊为群共享工作区）。保存成功提示只在私聊发送；被过滤/超限/失败等提示群聊也会发送。",
+        "default": true
+      },
+      "auto_save_quoted": {
+        "description": "保存引用消息里的文件",
+        "type": "bool",
+        "hint": "开启后会额外保存引用消息（回复）中的文件。默认关闭，避免反复引用同一条文件消息造成重复下载；同一 URL 10 分钟内只保存一次。",
+        "default": false
+      },
+      "suffix_filter_enable": {
+        "description": "后缀过滤",
+        "type": "bool",
+        "hint": "开启后拦截下方黑名单里的文件后缀，命中的文件不会被接收。文件名会先做清洗（去尾部空格/点等）再判断，避免绕过。",
+        "default": true
+      },
+      "blocked_suffixes": {
+        "description": "拦截后缀黑名单",
+        "type": "list",
+        "hint": "每行一个后缀（可带或不带点）。命中后缀的文件不会被下载保存，默认拦截常见可执行 / 脚本文件。",
+        "default": [
+          ".exe",
+          ".com",
+          ".scr",
+          ".pif",
+          ".bat",
+          ".cmd",
+          ".msi",
+          ".msc",
+          ".cpl",
+          ".dll",
+          ".sys",
+          ".ps1",
+          ".psm1",
+          ".vbs",
+          ".vbe",
+          ".js",
+          ".jse",
+          ".wsf",
+          ".hta",
+          ".py",
+          ".pyw",
+          ".pyd",
+          ".jar",
+          ".run",
+          ".app",
+          ".apk",
+          ".lnk",
+          ".reg"
+        ]
+      },
+      "max_single_file_mb": {
+        "description": "单个接收文件大小上限（MB）",
+        "type": "int",
+        "hint": "接收的单个文件最大大小，超过会被拒绝且不留残留文件；实际上限还会受工作区剩余上传配额约束。0 表示不限制，默认 50MB。",
+        "default": 50
+      },
+      "max_view_chars": {
+        "description": "查看文件最大字符数",
+        "type": "int",
+        "hint": "查看文件时最多显示的字符数（限长读取，不会读取整个文件）。",
+        "default": 1500
+      },
+      "view_image_preview": {
+        "description": "图片文件直接预览",
+        "type": "bool",
+        "hint": "使用 /查看文件 查看图片时，若图片不超过下方大小上限，直接发送图片预览；失败时回退为文件元信息。",
+        "default": true
+      },
+      "max_view_image_mb": {
+        "description": "图片预览大小上限（MB）",
+        "type": "int",
+        "hint": "超过该大小的图片不直接预览，只显示元信息。0 表示不限制。",
+        "default": 10
+      }
+    }
+  },
+  "limits": {
+    "description": "工作区配额",
+    "type": "object",
+    "hint": "只统计经插件接收的文件；AI 任务脚本、程序产物、手动放入的文件不计入。0 表示不限制。发送/接收频率限制也在此组配置。",
+    "items": {
+      "max_file_count": {
+        "description": "上传文件数量上限",
+        "type": "int",
+        "hint": "每个工作区最多保留多少个“经插件接收的文件”。群聊按群内所有成员上传总数计算。0 表示不限制，默认 10。",
+        "default": 10
+      },
+      "max_storage_mb": {
+        "description": "上传文件存储上限（MB）",
+        "type": "int",
+        "hint": "每个工作区中“经插件接收的文件”总大小上限；群聊按群内所有成员上传总数计算。0 表示不限制，默认 10MB。",
+        "default": 10
+      },
+      "send_rate_per_minute": {
+        "description": "发送频率上限（次/分钟）",
+        "type": "int",
+        "hint": "同一用户在同一会话中每分钟最多发起多少次 /发文件；0 表示不限制，默认 10 次。",
+        "default": 10
+      },
+      "receive_rate_per_minute": {
+        "description": "接收频率上限（个/分钟）",
+        "type": "int",
+        "hint": "同一工作区每分钟最多自动保存多少个文件；0 表示不限制，默认 20 个。",
+        "default": 20
+      }
+    }
+  },
+  "transfer": {
+    "description": "传输与可靠性",
+    "type": "object",
+    "hint": "控制并发传输、下载重试、超时与磁盘保留空间。大文件传输建议保留默认值或适当调大超时。",
+    "items": {
+      "max_concurrent_transfers": {
+        "description": "最大并发传输数",
+        "type": "int",
+        "hint": "同时进行的下载/发送任务上限，避免大文件占满带宽或阻塞事件循环。默认 2。",
+        "default": 2
+      },
+      "download_retry": {
+        "description": "下载重试次数",
+        "type": "int",
+        "hint": "接收文件失败后的额外重试次数（网络错误/5xx），默认 2 次；超限/磁盘不足不会重试。",
+        "default": 2
+      },
+      "transfer_timeout_seconds": {
+        "description": "传输超时（秒）",
+        "type": "int",
+        "hint": "单次下载/上传的总体超时时间，默认 1800 秒（30 分钟）；大文件可调大。",
+        "default": 1800
+      },
+      "min_free_disk_mb": {
+        "description": "磁盘保留空间（MB）",
+        "type": "int",
+        "hint": "接收文件前要求工作区所在磁盘至少保留的可用空间，低于该值拒绝下载，默认 200MB。",
+        "default": 200
+      }
+    }
+  },
+  "storage": {
+    "description": "存储与审计",
+    "type": "object",
+    "hint": "SQLite 索引与审计日志设置。索引只记录经插件接收的文件；审计记录收发、删除、清理等操作，可设置保留天数。",
+    "items": {
+      "dedupe_enabled": {
+        "description": "启用哈希去重",
+        "type": "bool",
+        "hint": "接收完成后计算 SHA256，同一工作区已存在相同哈希文件时跳过保存，避免重复占用配额。默认开启。",
+        "default": true
+      },
+      "audit_enabled": {
+        "description": "启用操作审计",
+        "type": "bool",
+        "hint": "记录接收、发送、删除、清理、限速等事件到 SQLite，供 WebUI 审计页查看。默认开启。",
+        "default": true
+      },
+      "audit_retention_days": {
+        "description": "审计日志保留天数",
+        "type": "int",
+        "hint": "超过该天数的审计记录会在定时清理时删除，0 表示永久保留，默认 30 天。",
+        "default": 30
+      }
+    }
+  },
+  "permissions": {
+    "description": "权限与白名单",
+    "type": "object",
+    "hint": "私聊白名单与群聊白名单相互独立；开启后仅名单内的用户/群可用。「仅私聊收发」优先级高于白名单。qq_official 平台下用户/群 ID 为 openid，请填写实际 openid。",
+    "items": {
+      "private_only": {
+        "description": "仅私聊收发",
+        "type": "bool",
+        "hint": "开启后只有私聊可以收发文件，群聊一律拒绝。",
+        "default": false
+      },
+      "whitelist_private_enable": {
+        "description": "启用私聊白名单",
+        "type": "bool",
+        "hint": "开启后仅「QQ/用户白名单」中的用户可以私聊收发文件；不影响群聊。",
+        "default": false
+      },
+      "whitelist_users": {
+        "description": "用户白名单",
+        "type": "list",
+        "hint": "每行一个用户 ID（NapCat 为 QQ 号，qq_official 为 openid）。私聊白名单开启后生效。",
+        "default": []
+      },
+      "whitelist_group_enable": {
+        "description": "启用群聊白名单",
+        "type": "bool",
+        "hint": "开启后仅「群白名单」中的群可以收发文件；不影响私聊。",
+        "default": false
+      },
+      "whitelist_groups": {
+        "description": "群白名单",
+        "type": "list",
+        "hint": "每行一个群 ID（NapCat 为群号，qq_official 为群 openid）。群聊白名单开启后生效。",
+        "default": []
+      },
+      "allowed_send_dirs": {
+        "description": "普通用户允许发送的目录",
+        "type": "list",
+        "hint": "每行一个目录。普通用户只能发送当前工作区或这些目录（含子目录）内的文件；AstrBot 管理员可发送任意可读文件，不受此项限制。",
+        "default": []
+      }
+    }
+  },
+  "workspace": {
+    "description": "工作区清理",
+    "type": "object",
+    "hint": "工作区即 AstrBot 会话工作区（AI 任务 cwd）；清理只作用于 QQ 用户群聊工作区，不清理 EXTRA_PROMPT.md、隐藏文件、目录与符号链接。",
+    "items": {
+      "workspace_auto_clean": {
+        "description": "定时清理工作区文件",
+        "type": "bool",
+        "hint": "开启后按下方保留时长，定时清理所有 QQ 用户/群聊工作区中的超期文件（包含 AI 为完成任务编写的脚本和产物）。默认开启，请谨慎设置保留时长。",
+        "default": true
+      },
+      "workspace_clean_interval_hours": {
+        "description": "工作区文件保留时长（小时）",
+        "type": "int",
+        "hint": "工作区文件保存超过这个时长后会被自动清理，单位小时，默认 1 小时。",
+        "default": 1
+      }
+    }
+  },
   "callback_api_base": {
-    "description": "NapCat 访问地址",
+    "description": "旧版配置项 callback_api_base（兼容保留，请勿编辑；新配置请使用上方分组）",
     "type": "string",
-    "hint": "URL 模式发送文件用。同一容器 / 宿主机可填 http://127.0.0.1:6185；NapCat 在另一容器则填 http://<AstrBot容器IP或宿主机IP>:6185。留空则只用路径映射模式。",
-    "default": "http://127.0.0.1:6185"
+    "default": "http://127.0.0.1:6185",
+    "invisible": true
   },
   "napcat_path_mapping": {
-    "description": "路径映射规则",
+    "description": "旧版配置项 napcat_path_mapping（兼容保留，请勿编辑；新配置请使用上方分组）",
     "type": "string",
-    "hint": "格式：AstrBot路径:NapCat路径，例如 /test:/napcat/test；Windows 下可写 D:/astrbot:/napcat；也可用 => 分隔。仅当 NapCat 与 AstrBot 共享同一目录时使用。",
-    "default": ""
+    "default": "",
+    "invisible": true
   },
   "auto_save": {
-    "description": "自动保存收到的文件",
+    "description": "旧版配置项 auto_save（兼容保留，请勿编辑；新配置请使用上方分组）",
     "type": "bool",
-    "hint": "开启后把收到的文件保存到当前会话工作区（私聊为本人 QQ 工作区，群聊为群共享工作区）。保存成功提示只在私聊发送；被过滤/超限/失败等提示群聊也会发送。",
-    "default": true
+    "default": true,
+    "invisible": true
   },
   "auto_save_quoted": {
-    "description": "保存引用消息里的文件",
+    "description": "旧版配置项 auto_save_quoted（兼容保留，请勿编辑；新配置请使用上方分组）",
     "type": "bool",
-    "hint": "开启后会额外保存引用消息（回复）中的文件。默认关闭，避免反复引用同一条文件消息造成重复下载；同一 URL 10 分钟内只保存一次。",
-    "default": false
+    "default": false,
+    "invisible": true
   },
   "max_view_chars": {
-    "description": "查看文件最大字符数",
+    "description": "旧版配置项 max_view_chars（兼容保留，请勿编辑；新配置请使用上方分组）",
     "type": "int",
-    "hint": "查看文件时最多显示的字符数（限长读取，不会读取整个文件）。",
-    "default": 1500
+    "default": 1500,
+    "invisible": true
   },
   "private_only": {
-    "description": "仅私聊收发",
+    "description": "旧版配置项 private_only（兼容保留，请勿编辑；新配置请使用上方分组）",
     "type": "bool",
-    "hint": "开启后只有私聊可以收发文件，群聊一律拒绝。",
-    "default": false
+    "default": false,
+    "invisible": true
   },
   "whitelist_enable": {
-    "description": "白名单模式",
+    "description": "旧版配置项 whitelist_enable（兼容保留，请勿编辑；新配置请使用上方分组）",
     "type": "bool",
-    "hint": "开启后仅收发白名单内的群和用户的文件。",
-    "default": false
+    "default": false,
+    "invisible": true
   },
   "whitelist_groups": {
-    "description": "群号白名单",
+    "description": "旧版配置项 whitelist_groups（兼容保留，请勿编辑；新配置请使用上方分组）",
     "type": "list",
-    "hint": "每行一个群号。白名单模式开启后，仅这些群可以收发文件。",
-    "default": []
+    "default": [],
+    "invisible": true
   },
   "whitelist_users": {
-    "description": "QQ 号白名单",
+    "description": "旧版配置项 whitelist_users（兼容保留，请勿编辑；新配置请使用上方分组）",
     "type": "list",
-    "hint": "每行一个 QQ。白名单模式开启后，仅这些用户可以私聊收发文件。",
-    "default": []
+    "default": [],
+    "invisible": true
   },
   "suffix_filter_enable": {
-    "description": "后缀过滤",
+    "description": "旧版配置项 suffix_filter_enable（兼容保留，请勿编辑；新配置请使用上方分组）",
     "type": "bool",
-    "hint": "开启后拦截下方黑名单里的文件后缀，命中的文件不会被接收。文件名会先做清洗（去尾部空格/点等）再判断，避免绕过。",
-    "default": true
+    "default": true,
+    "invisible": true
   },
   "blocked_suffixes": {
-    "description": "拦截后缀黑名单",
+    "description": "旧版配置项 blocked_suffixes（兼容保留，请勿编辑；新配置请使用上方分组）",
     "type": "list",
-    "hint": "每行一个后缀（可带或不带点）。命中后缀的文件不会被下载保存，默认拦截常见可执行 / 脚本文件。",
     "default": [
       ".exe",
       ".com",
@@ -92,48 +349,55 @@
       ".apk",
       ".lnk",
       ".reg"
-    ]
+    ],
+    "invisible": true
   },
   "max_file_count": {
-    "description": "上传文件数量上限",
+    "description": "旧版配置项 max_file_count（兼容保留，请勿编辑；新配置请使用上方分组）",
     "type": "int",
-    "hint": "每个工作区最多保留多少个“经插件接收的文件”（AI 任务脚本、程序产物等不计入）。群聊按群内所有成员上传总数计算。0 表示不限制，默认 10。",
-    "default": 10
+    "default": 10,
+    "invisible": true
   },
   "max_storage_mb": {
-    "description": "上传文件存储上限（MB）",
+    "description": "旧版配置项 max_storage_mb（兼容保留，请勿编辑；新配置请使用上方分组）",
     "type": "int",
-    "hint": "每个工作区中“经插件接收的文件”总大小上限，AI 任务文件不计入；群聊按群内所有成员上传总数计算。0 表示不限制，默认 10MB。",
-    "default": 10
+    "default": 10,
+    "invisible": true
   },
   "max_single_file_mb": {
-    "description": "单个接收文件大小上限（MB）",
+    "description": "旧版配置项 max_single_file_mb（兼容保留，请勿编辑；新配置请使用上方分组）",
     "type": "int",
-    "hint": "接收的单个文件最大大小，超过会被拒绝且不留残留文件；实际上限还会受工作区剩余上传配额约束。0 表示不限制，默认 50MB。",
-    "default": 50
+    "default": 50,
+    "invisible": true
   },
   "max_send_mb": {
-    "description": "发送文件大小上限（MB）",
+    "description": "旧版配置项 max_send_mb（兼容保留，请勿编辑；新配置请使用上方分组）",
     "type": "int",
-    "hint": "/发文件 允许发送的单个文件最大大小，0 表示不限制，默认 100MB。",
-    "default": 100
+    "default": 100,
+    "invisible": true
   },
   "allowed_send_dirs": {
-    "description": "普通用户允许发送的目录",
+    "description": "旧版配置项 allowed_send_dirs（兼容保留，请勿编辑；新配置请使用上方分组）",
     "type": "list",
-    "hint": "每行一个目录。普通用户只能发送当前工作区或这些目录（含子目录）内的文件；AstrBot 管理员可发送任意可读文件，不受此项限制。",
-    "default": []
+    "default": [],
+    "invisible": true
   },
   "workspace_auto_clean": {
-    "description": "定时清理工作区文件",
+    "description": "旧版配置项 workspace_auto_clean（兼容保留，请勿编辑；新配置请使用上方分组）",
     "type": "bool",
-    "hint": "开启后按下方保留时长，定时清理所有 QQ 用户/群聊工作区中的超期文件（包含 AI 为完成任务编写的脚本和产物）。不会清理 EXTRA_PROMPT.md、隐藏文件与目录。默认开启，请谨慎设置保留时长。",
-    "default": true
+    "default": true,
+    "invisible": true
   },
   "workspace_clean_interval_hours": {
-    "description": "工作区文件保留时长（小时）",
+    "description": "旧版配置项 workspace_clean_interval_hours（兼容保留，请勿编辑；新配置请使用上方分组）",
     "type": "int",
-    "hint": "工作区文件保存超过这个时长后会被自动清理，单位小时，默认 1 小时。",
-    "default": 1
+    "default": 1,
+    "invisible": true
+  },
+  "_migrated_v153": {
+    "description": "内部迁移标志（请勿编辑）",
+    "type": "bool",
+    "default": false,
+    "invisible": true
   }
 }

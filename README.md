@@ -1,157 +1,162 @@
 # 文件收发工具（file_transfer）
 
-一个 [AstrBot](https://github.com/AstrBotDevs/AstrBot) 插件：让机器人能在 QQ 会话里**收发文件**、**自动保存收到的文件**并**查看内容**。工作区直接复用 AstrBot 会话工作区——私聊按 QQ 号独立、群聊按群号共享，AI 完成任务时写进工作区的脚本和产物也可以正常使用。
+让 AstrBot 在 QQ 会话里**收发文件**、**自动保存收到的文件**、**查看内容**，并提供可操作的 WebUI 管理面板。工作区复用 AstrBot 会话工作区：私聊独立、群聊共享；AI 任务脚本与产物也可正常使用。
 
-> 当前版本：**1.5.2**（支持 AstrBot >= 4.0.0（4.x），已在 4.28.1 上实测；版本要求已按 AstrBot 源码接口核对校正）。
+支持 **NapCat / aiocqhttp** 与 **QQ 官方机器人（qq_official / qq_official_webhook）**。
 
-## 功能
+> 当前版本：**1.6.0**　|　AstrBot：**>= 4.0.0**（WebUI 页面需支持插件可视化视图）　|　分类：工具
 
-- **私聊工作区按 QQ 号隔离**：`data/workspaces/<平台>_FriendMessage_<QQ号>/`，同一用户的所有私聊文件共用一个工作区。
-- **群聊共享工作区**：`data/workspaces/<平台>_GroupMessage_<群号>/`，同群成员共同使用；只要在对应群且有权限，成员都可以查看 / 删除 / 发送该工作区里的文件。
-- **工作区即 AI 任务目录**：工作区就是 AstrBot 的会话工作区（AI 任务 cwd），收到的文件可直接被任务使用；AI 为完成任务编写的脚本、产物也存放在这里。
-- **自动接收**：监听消息里的文件段，自动下载保存；保存成功的提示只在私聊发送，群聊不刷屏；被过滤/超限/下载失败等异常提示在当前会话发送（含群聊）。
-- **安全接收**：文件名自动清洗（去路径、去非法字符、去尾部空格/点、限长、避开 Windows 保留名），后缀黑名单过滤，单文件大小与上传配额限制；下载经过临时文件 + 原子落盘，失败不留残文件；同一 URL 10 分钟内只保存一次，引用消息中的文件默认不保存；不会覆盖 `EXTRA_PROMPT.md` 等受保护文件。
-- **发送本地文件**：`/发文件` 支持按工作区序号发送，或按路径发送（URL 模式：AstrBot 文件服务 + NapCat 下载；路径映射模式：NapCat 与 AstrBot 共享目录）。
-- **发送权限**：
-  - **AstrBot 管理员**：可发送任意可读文件（包括 AstrBot 数据目录、系统文件等），请只授予可信人员；
-  - **普通用户**：只能发送当前工作区或管理员配置目录（`allowed_send_dirs`）中的文件。
-- **配额只统计上传文件**：数量 / 容量上限只统计**经插件接收的文件**，AI 任务脚本、程序产物、用户手动放入的文件不计入；群聊配额 = 群内所有成员上传文件的总和。
-- **定时清理**：默认开启，定时清理所有 QQ 用户 / 群聊工作区中的超期文件（**包含 AI 编写的任务脚本和产物**），保留时长默认 1 小时；跳过 `EXTRA_PROMPT.md`、隐藏文件、目录与符号链接。
-- **其他**：仅私聊收发、群号白名单、QQ 白名单、限长查看文件、管理员跨 QQ 查看工作区列表。
+## 开发者信息
 
-## 指令
+- 作者：**shuran**
+- 联系邮箱：**2556246092@qq.com**
+- 适配平台：aiocqhttp（NapCat）、qq_official、qq_official_webhook
+- 插件市场：AstrBot Cloud（分类：工具）
+- 随插件 Skill：`skills/file-transfer/SKILL.md`
 
-| 指令 | 别名 | 权限 | 说明 |
-| --- | --- | --- | --- |
-| `/发文件 <序号\|路径>` | `sendfile` | 普通用户：当前工作区/配置目录；管理员：任意可读文件 | 按工作区序号或本地路径把文件发送到当前会话 |
-| `/查看文件 [序号\|文件名]` | `catfile` | 通用 | 查看当前工作区最近/指定文件内容 |
-| `/文件列表` | `filelist` | 通用 | 列出当前工作区文件（群聊为群共享工作区） |
-| `/文件列表 <QQ号>` | `filelist` | 管理员 | 查看指定 QQ 号私聊工作区的文件清单（只读，不创建） |
-| `/删除文件 <序号\|文件名>` | `delfile` | 通用 | 按序号或文件名删除当前工作区里的文件（受保护文件除外） |
+## 功能特性
 
-> `/查看文件 <序号>`、`/发文件 <序号>`、`/删除文件 <序号>` 与 `/文件列表` 使用同一排序（按修改时间升序，序号 1 为最旧），列表只显示最近 15 个文件。工作区里的 AI 任务脚本、产物同样会出现在列表与查看结果中。
+- **WebUI 管理面板**：概览、文件管理、审计日志、配额与限速、运行与配置 5 个子页面；支持上传/重命名/删除/清理文件、清空审计、在线修改全部配置。WebUI 上传使用分片 JSON，避开 multipart/反向代理 body 限制导致的 502。
+- **SQLite 索引**：上传索引从 JSON 升级为 SQLite；旧索引自动迁移并备份。
+- **哈希去重**：接收后计算 SHA256，同一工作区已有相同内容时跳过保存。
+- **操作审计**：接收/发送/上传/重命名/删除/限速/清理/查看/下载/配置修改事件可筛选、分页、按天保留。
+- **传输可靠性**：并发上限、下载重试、传输超时、磁盘保留空间检查。
+- **查看增强**：UTF-8 / UTF-16 / GB18030 识别、分页查看、图片预览、文件元信息。
+- **配额与限速**：上传数量/存储配额、发送/接收频率限制、WebUI 使用率展示。
+- **双平台发送**：NapCat 用 URL/路径映射；QQ 官方机器人用官方富媒体上传。
+- **安全接收**：文件名清洗、后缀黑名单、大小/配额限制、临时文件原子落盘。
+- **定时清理**：默认开启，清理 QQ 工作区超期文件（包括 AI 脚本与产物）。
 
-## 工作区说明
+## 快速开始
 
-| 场景 | 工作区目录 | 说明 |
-| --- | --- | --- |
-| 私聊 | `data/workspaces/<平台>_FriendMessage_<QQ号>/` | 按 QQ 号独立，只有本人使用 |
-| QQ 群聊 | `data/workspaces/<平台>_GroupMessage_<群号>/` | 群成员共享，可互相查看 / 删除 / 发送 |
-| 其他平台 | 不做适配 | 以 AstrBot 自身会话工作区为准，行为不作保证 |
+1. 将插件目录放入 AstrBot 的 `data/plugins/`，在 WebUI 启用并重载。
+2. 打开插件详情页 →「页面」，进入 **文件概览 / 文件管理 / 审计日志 / 配额与限速 / 运行与配置**。
+3. 按平台配置：
+   - **NapCat**：填「发送设置 → AstrBot 文件服务地址」（NapCat 能访问的 dashboard 地址）；共享目录时可用路径映射。
+   - **qq_official**：无需 `callback_api_base` / 路径映射，直接使用官方富媒体上传。
+4. 私聊发送文件测试自动保存；用 `/文件列表` 查看。
+5. 按需配置白名单、审计保留天数与发送/接收频率。
 
-- 工作区目录由 `unified_msg_origin` 确定性生成，不依赖目录扫描，匹配稳定。
-- 收到的文件写入工作区根目录，与 AI 任务文件同目录；重名时自动追加 `_1`、`_2` 后缀，不覆盖已有文件。
-- 插件在 `data/plugin_data/file_transfer/received_index.json` 维护“上传文件”索引，用于数量 / 容量统计；索引随文件删除、清理自动同步。
-- 1.3.3 版本的文件本来就在会话工作区中，升级后直接可见；1.4.0（未发布中间版）写入插件数据目录的文件不会自动迁移，如需保留请手动移入对应工作区。
+## WebUI 页面
 
-## 配置项
+页面顶部提供「概览 / 文件管理 / 审计日志 / 配额与限速 / 运行与配置」标签栏，主页面可直接切换全部功能；侧边栏也可单独打开任一页面。
 
-| 配置 | 类型 | 默认值 | 说明 |
-| --- | --- | --- | --- |
-| `callback_api_base` | string | `http://127.0.0.1:6185` | URL 模式的 NapCat 访问地址（AstrBot 文件服务地址）。留空则只用路径映射模式 |
-| `napcat_path_mapping` | string | 空 | 路径映射，格式 `AstrBot路径:NapCat路径`（如 `/test:/napcat/test`）；Windows 可写 `D:/astrbot:/napcat`；也可用 `=>` 分隔 |
-| `auto_save` | bool | `true` | 是否自动保存收到的文件到当前会话工作区 |
-| `auto_save_quoted` | bool | `false` | 是否保存引用消息中的文件（默认关闭，避免重复下载） |
-| `max_view_chars` | int | `1500` | 查看文件时最多显示的字符数 |
-| `private_only` | bool | `false` | 开启后仅私聊可以收发，群聊一律拒绝 |
-| `whitelist_enable` | bool | `false` | 开启后仅白名单内的群 / 用户可用 |
-| `whitelist_groups` | list | 空 | 群号白名单 |
-| `whitelist_users` | list | 空 | QQ 号白名单 |
-| `suffix_filter_enable` | bool | `true` | 是否开启接收文件后缀过滤 |
-| `blocked_suffixes` | list | `.exe/.js/.ps1` 等 | 拦截后缀黑名单（命中不接收） |
-| `max_file_count` | int | `10` | 每个工作区**上传文件**数量上限（AI 脚本不计），群聊按群成员上传总和；`0`=不限制 |
-| `max_storage_mb` | int | `10` | 每个工作区**上传文件**总大小上限（MB），`0`=不限制 |
-| `max_single_file_mb` | int | `50` | 单个接收文件大小上限（MB），`0`=不限制 |
-| `max_send_mb` | int | `100` | `/发文件` 发送文件大小上限（MB），`0`=不限制 |
-| `allowed_send_dirs` | list | 空 | 允许**普通用户**发送的额外目录（管理员不受限） |
-| `workspace_auto_clean` | bool | `true` | 是否定时清理所有 QQ 用户 / 群聊工作区的超期文件（含任务脚本） |
-| `workspace_clean_interval_hours` | int | `1` | 工作区文件保留时长（小时） |
+- **文件概览**：工作区、文件总数、上传配额、24h 审计事件、最近事件、工作区排行。
+- **文件管理**：按工作区浏览、搜索、查看大小/来源/SHA256、文本预览、下载，以及上传、重命名、删除、清理过期文件、清空工作区。
+- **审计日志**：按事件/级别/工作区/关键词筛选，分页查看操作记录；支持清空审计。
+- **配额与限速**：工作区上传数量/存储使用率、频率限制、传输并发/重试/超时。
+- **运行与配置**：版本、平台、工作区与 SQLite 路径；可编辑全部可见配置并保存/恢复默认。
 
-## 权限与清理规则
+> WebUI 为**管理面板**：文件、审计、配置均可操作；仅 AstrBot 管理员可访问 Dashboard，请妥善保管管理入口。发送到 QQ 会话仍使用 `/发文件` 指令。
 
-**发送判定**
+## 使用说明
 
-1. 发送者是 AstrBot 管理员（`admins_id` / `role=admin`）→ 允许发送任意可读文件；
-2. 否则，文件位于当前工作区内 → 允许；
-3. 否则，文件位于 `allowed_send_dirs` 内 → 允许；
-4. 否则 → 拒绝。
+### 工作区
 
-**接收/查看/删除/列表**
+- 私聊：`<AstrBot数据目录>/workspaces/<平台>_FriendMessage_<用户ID>/`
+- 群聊：`<AstrBot数据目录>/workspaces/<平台>_GroupMessage_<群ID>/`，群成员共享。
+- 收到的文件与 AI 任务文件同目录；重名自动追加 `_1`/`_2`，不覆盖已有文件。
+- NapCat 的 ID 为 QQ 号/群号；qq_official 为 openid / group_openid。
 
-- 私聊：只作用于本人 QQ 工作区；
-- 群聊：作群共享工作区，群内成员只要通过 `private_only` / 白名单校验，就可以查看、删除、发送；
-- 受保护文件 `EXTRA_PROMPT.md`：不可接收（会被改名为 `recv_EXTRA_PROMPT.md`）、不可删除、不被清理。
+### 发送文件
 
-**定时清理**
+- **NapCat**：URL 模式（`callback_api_base` + 一次性 token URL）优先；失败回退路径映射（`napcat_path_mapping`，格式 `A:B` 或 `A=>B`）。
+- **qq_official**：`File(name, file=本地路径)` 交给官方适配器上传；支持群聊与 C2C 单聊，**频道消息不支持文件**；平台硬限制 200MB。
+- 权限：管理员可发送任意可读文件；普通用户仅当前工作区或 `allowed_send_dirs`。
+- 频率：默认每用户/会话每分钟 10 次，可在「配额与限速」调整。
 
-- 默认开启，每 5 分钟检查一次，达到保留时长（默认 1 小时）即删除；
-- 清理范围：`data/workspaces/` 下目录名包含 `_FriendMessage_` 或 `_GroupMessage_` 的工作区（QQ 用户 / 群聊），只处理每个目录第一层的普通文件；
-- **会删除 AI 为完成任务编写的脚本、产物等文件**（这正是本插件工作区生命周期管理的目的），请按需调整保留时长；
-- 跳过 `EXTRA_PROMPT.md`、以 `.` 开头的隐藏文件、目录与符号链接；清理后自动同步上传索引。
+### 接收文件
 
-> ⚠️ 清理默认开启且会删除工作区内的任务脚本/产物。若工作区中有需要长期保留的文件，请调大 `workspace_clean_interval_hours` 或关闭 `workspace_auto_clean`。
+- 直接发送的文件自动保存；引用消息文件默认不保存（`auto_save_quoted`）。
+- 接收前检查后缀黑名单、单文件大小、上传配额、磁盘空间与接收频率。
+- 下载失败自动重试（默认 2 次）；临时文件 + 原子改名，失败不留残文件。
+- 默认哈希去重：同工作区已有相同 SHA256 时提示重复并跳过。
+- 保存成功只在私聊提示；异常提示群聊也会发送。
 
-## 安全说明
+### 查看文件
 
-- 管理员任意文件权限是明确的信任边界：只把 AstrBot 管理员授予可信人员。
-- 普通用户默认只能操作自己的工作区；群聊工作区对群成员共享，请配合 `whitelist_enable` / `private_only` 控制可用群。
-- 接收的文件会进入 AI 会话工作区，AI 任务可以直接读取/处理；文件内容对 AI 仍是不可信数据，请勿给不可信群开放文件功能。
-- 文件名会被清洗，不会覆盖工作区控制文件；下载失败/超限不会留下残文件。
+- `/查看文件`：最新文件第 1 页。
+- `/查看文件 <序号|文件名> [页码]`：分页查看，页码最多 500。
+- 自动识别 UTF-8 / UTF-16 / GB18030；图片在大小限制内直接预览；二进制显示元信息与 SHA256。
+- WebUI「文件管理」支持文本预览、下载、上传、重命名、删除、清理过期文件与清空工作区。
 
-## 发送文件的两种模式
+### 审计 / 配额 / 清理
 
-- **URL 模式（推荐）**：配置 `callback_api_base` 为 NapCat 能访问到的 AstrBot 地址。发送时插件通过 AstrBot 文件服务生成一次性下载链接，NapCat 自行下载。同一容器内可填 `http://127.0.0.1:6185`；NapCat 在宿主机或另一容器时填对应 IP / 域名。
-- **路径映射模式**：配置 `napcat_path_mapping`，把 AstrBot 侧路径映射成 NapCat 侧路径（要求两者共享同一目录）。未配置映射时会把文件的本地绝对路径直接交给 NapCat（仅适用于同一宿主机/容器的场景）。
+- 审计默认开启、保留 30 天；记录接收、发送、删除、限速、清理、查看、WebUI 下载等事件。
+- 上传配额统计经插件接收或 WebUI 上传的文件：`max_file_count`、`max_storage_mb`，0=不限；AI 脚本/产物不计入。
+- 发送/接收频率：`send_rate_per_minute`、`receive_rate_per_minute`，0=不限。
+- 定时清理默认开启（保留 1 小时），清理 QQ 用户/群工作区超期普通文件（含 AI 脚本/产物）；跳过 `EXTRA_PROMPT.md`、隐藏文件、目录、符号链接。
 
-URL 模式发送失败时会自动尝试路径映射模式；两种模式都失败时会给出通用错误提示，详细原因请查看 AstrBot 日志。
+## 平台与兼容性
 
-## 升级说明（1.3.3 → 1.5.2）
-
-1. **工作区沿用 AstrBot 会话工作区**：私聊 `<平台>_FriendMessage_<QQ>`、群聊 `<平台>_GroupMessage_<群号>`；1.3.3 的文件升级后直接可见。
-2. **群聊工作区共享**：同群成员可共同查看 / 删除 / 发送；保存成功不刷屏回执，异常（过滤/超限/失败）会提示。
-3. **配额只统计上传文件**：AI 任务脚本、产物不计入数量 / 容量上限；群聊为群内所有成员上传总和。
-4. **管理员任意文件权限**：普通用户仍限制在当前工作区 / `allowed_send_dirs`。
-5. **清理默认开启**：默认保留 1 小时，会清理工作区内的任务脚本与产物；如不需要请关闭 `workspace_auto_clean` 或调大保留时长。
-6. **配置变更**：删除 `auto_clean`、`clean_interval_hours`、`send_restrict_paths`；新增 `auto_save_quoted`、`max_single_file_mb`、`max_send_mb`；`max_file_count` / `max_storage_mb` 语义改为只统计上传文件。
-7. **1.5.1**：`/删除文件` 新增按序号删除，与 `/文件列表`、`/查看文件 <序号>` 使用同一排序（修改时间升序，1 为最旧）。
-8. **1.5.2**：`/发文件` 新增按序号发送；`/查看文件`、`/发文件`、`/删除文件` 的序号与 `/文件列表` 完全一致。同时按 AstrBot 源码接口核对，`metadata.yaml` 的 `astrbot_version` 由 `>=4.5,<5` 校正为 `>=4.0.0`（所用接口自 v4.0.0 起均存在）；并新增 `category: 工具` 与 `tags`，将 AstrBot Cloud 插件市场分类指定为「工具」。
-
-## 依赖与兼容性
-
-- AstrBot `>=4.0.0`（4.x）。已按 AstrBot 源码逐项核对：`File(name, file, url)` 与出站 `File.to_dict()`、`Reply.chain`、`StarTools.get_data_dir()`、`filter.command(alias=...)` / `EventMessageType.ALL`、`event.is_admin()/chain_result()/send()/get_group_id()/get_sender_id()/get_platform_id()`、`file_token_service.register_file(path, timeout=...)` 与 `/api/file/<token>` 路由、`_conf_schema.json` + `AstrBotConfig(schema=...)` 默认值合并、插件加载器传入 `config` 等接口在 v4.0.0 即已存在；`event.unified_msg_origin` 在旧版缺失时插件会用平台 ID / 群号 / QQ 号自行拼装兜底。
-- 实际运行验证基于 AstrBot 4.28.1；AstrBot 5.x 尚未发布，按官方插件发布文档示例只声明最低版本、不设上限。
-- 主要面向 **aiocqhttp / NapCat**（OneBot v11）；其他平台不做适配。
-- 兼容旧 AstrBot 时读取管理员名单会回退读取 `data/cmd_config.json` 的 `admins_id`，不写死任何 QQ。
-
-## 插件市场元数据（category / tags）
-
-`metadata.yaml` 中额外声明了插件市场分类与标签：
-
-```yaml
-category: 工具
-tags:
-  - 工具
-  - 文件
-  - 文件传输
-  - 文件管理
-  - QQ
-```
-
-- `category` / `tags` 供 **AstrBot Cloud 插件市场**做分类与搜索使用；AstrBot 运行时加载器只读取已知字段，这两个字段不会影响本地插件加载。
-- 已核对市场接口：发布到 AstrBot Cloud 的插件，其 `metadata.yaml` 的 `category` 字段会被市场收录（部分插件靠审核端手动设置分类）。本插件目标分类为 **工具**。
-- 本地 WebUI 插件详情若显示 `[MISSING: features.extension.market.categories.其他]` 之类的文本，是 AstrBot WebUI 缺少对应中文分类的 i18n 标签导致的显示问题（分类值来自云端为中文）；在云端把分类改为「工具」后，市场分类筛选会变更，但该 MISSING 标签是否消失取决于所用 AstrBot WebUI 版本是否提供对应翻译，与本插件代码无关。
+- **aiocqhttp/NapCat**：完整支持；`callback_api_base` 指向 dashboard（默认 6185），跨容器/跨机不能写 `127.0.0.1`。
+- **qq_official**：群聊/C2C 支持文件，频道不支持；官方文件类型 4、硬限制 200MB、支持分片上传；需要开放平台文件/富媒体权限；白名单填 openid。
+- **版本**：AstrBot `>=4.0.0`，验证基于 4.28.1；WebUI 页面需 AstrBot 插件可视化视图；建议 qq_official 使用 4.27.3+。
+- 参考：[AstrBot QQ 官方接入](https://docs.astrbot.app/platform/qqofficial.html)、[QQ 富媒体文档](https://bot.q.qq.com/wiki/develop/api-v2/server-inter/message/send-receive/rich-media.html)。
 
 ## 常见问题
 
-- **`/发文件` 提示“该文件不在允许发送的目录内”**：普通用户只能发送当前工作区或 `allowed_send_dirs` 中的文件；管理员不受限制。
-- **想发工作区里的第 N 个文件**：先 `/文件列表` 看序号，再用 `/发文件 N` 发送（与 `/查看文件 N`、`/删除文件 N` 序号一致）。
-- **群聊里看不到别人发的文件**：请确认没有开启 `private_only`，且该群通过白名单校验；群聊工作区是共享的。
-- **工作区里的脚本怎么没了**：定时清理默认开启，会删除超过保留时长（默认 1 小时）的文件；请调大 `workspace_clean_interval_hours` 或关闭 `workspace_auto_clean`。
-- **上传提示“工作区上传文件数量已达上限”**：只统计经插件接收的文件（默认 10 个、10MB），AI 脚本不占配额；可调大 `max_file_count` / `max_storage_mb` 或删除旧上传文件。
-- **URL 模式发不出去**：确认 `callback_api_base` 是 NapCat 能访问的地址（容器部署不要用 `127.0.0.1` 指代另一个容器）。
-- **路径映射模式发不出去**：确认 NapCat 与 AstrBot 共享了同一目录，且映射正确（Windows 盘符路径可用 `D:/astrbot:/napcat` 或 `D:/astrbot=>/napcat`）。
+- **WebUI 没有页面**：确认 AstrBot 支持插件可视化视图；重载插件并刷新详情页；检查 `pages/<页面>/index.html`。
+- **WebUI 上传 502**：v1.6.0 已改为分片上传（每片 256KB）；请重载插件并强制刷新页面。若仍 502，检查反向代理的请求 body 限制、超时与 WebSocket/HTTP 转发配置。
+- **审计没有数据**：确认「存储与审计 → 启用操作审计」；升级后只记录新事件。
+- **去重误判**：只比较同一工作区 SHA256；可在「存储与审计」关闭。
+- **只能看第一页**：用 `/查看文件 <序号|文件名> 2` 继续；页码上限 500。
+- **NapCat 发送失败**：确认 `callback_api_base` 指向 dashboard、NapCat 能访问；token 单次有效。
+- **路径映射失败**：确认共享目录与映射（Windows 可用 `D:/astrbot:/napcat` 或 `D:/astrbot=>/napcat`）。
+- **qq_official 发文件失败**：确认是群聊/单聊而非频道、机器人有文件权限、文件 ≤200MB。
+- **文件/脚本消失**：定时清理默认开启；调大保留时长或关闭 `workspace_auto_clean`。
+- **旧索引**：升级 1.6.0 自动导入 SQLite，原 `received_index.json` 改名为 `.migrated` 备份。
 
-## 作者
+## 附录 A：指令列表
 
-- 名字：shuran
-- QQ：2556246092
+| 指令 | 别名 | 权限 | 说明 |
+| --- | --- | --- | --- |
+| `/发文件 <序号\|路径>` | `sendfile` | 普通用户：工作区/配置目录；管理员：任意可读文件 | 按序号或路径发送 |
+| `/查看文件 [序号\|文件名] [页码]` | `catfile` | 通用 | 查看内容，支持分页与图片预览 |
+| `/文件列表` | `filelist` | 通用 | 当前工作区文件（群聊共享） |
+| `/文件列表 <QQ号/用户ID>` | `filelist` | 管理员 | 查询指定用户私聊工作区 |
+| `/删除文件 <序号\|文件名>` | `delfile` | 通用 | 删除文件（受保护文件除外） |
+
+> 序号按修改时间升序，`1` 最旧；`/查看文件`、`/发文件`、`/删除文件` 与 `/文件列表` 同一排序。列表只显示最近 15 个，但序号按全部文件计算。
+
+## 附录 B：配置项
+
+**发送设置**：`callback_api_base`（默认 `http://127.0.0.1:6185`，NapCat 用）、`napcat_path_mapping`（空）、`max_send_mb`（100）
+
+**接收与查看**：`auto_save`（true）、`auto_save_quoted`（false）、`suffix_filter_enable`（true）、`blocked_suffixes`（常见可执行/脚本后缀）、`max_single_file_mb`（50）、`max_view_chars`（1500）、`view_image_preview`（true）、`max_view_image_mb`（10）
+
+**配额与限速**：`max_file_count`（10）、`max_storage_mb`（10）、`send_rate_per_minute`（10）、`receive_rate_per_minute`（20）
+
+**传输与可靠性**：`max_concurrent_transfers`（2）、`download_retry`（2）、`transfer_timeout_seconds`（1800）、`min_free_disk_mb`（200）
+
+**存储与审计**：`dedupe_enabled`（true）、`audit_enabled`（true）、`audit_retention_days`（30）
+
+**权限与白名单**：`private_only`（false）、`whitelist_private_enable`（false）、`whitelist_users`（空）、`whitelist_group_enable`（false）、`whitelist_groups`（空）、`allowed_send_dirs`（空）
+
+**工作区清理**：`workspace_auto_clean`（true）、`workspace_clean_interval_hours`（1）
+
+## 附录 C：数据路径
+
+| 内容 | 路径 |
+| --- | --- |
+| 私聊工作区 | `<AstrBot数据目录>/workspaces/<平台>_FriendMessage_<用户ID>/` |
+| 群聊工作区 | `<AstrBot数据目录>/workspaces/<平台>_GroupMessage_<群ID>/` |
+| SQLite（索引+审计） | `<AstrBot数据目录>/plugin_data/file_transfer/file_transfer.db` |
+| 旧索引备份 | `<AstrBot数据目录>/plugin_data/file_transfer/received_index.json.migrated` |
+| 插件配置 | `<AstrBot数据目录>/config/<插件目录名>_config.json` |
+| Skill | `<插件目录>/skills/file-transfer/SKILL.md` |
+
+## 更新日志
+
+- **1.6.0**
+  - 新增可操作 WebUI（概览/文件/审计/配额/运行与配置 5 页）：文件上传/重命名/删除/清理、清空审计、在线配置保存/重置。
+  - JSON 索引升级 SQLite，旧索引自动迁移；SHA256 哈希去重。
+  - 操作审计（接收/发送/删除/限速/清理/查看/下载），支持筛选、分页、保留天数。
+  - 大文件可靠性：并发上限、下载重试、传输超时、磁盘保留空间。
+  - 查看增强：编码识别、分页、图片预览、二进制元信息。
+  - 新增发送/接收频率限制与配额使用率展示；配置新增「传输与可靠性」「存储与审计」分组。
+- **1.5.3**：适配 QQ 官方机器人；私聊/群聊白名单拆分；配置分组与 README 重构。
+- **1.5.2**：`/发文件` 支持序号；版本要求校正为 `>=4.0.0`。
+- **1.5.1**：`/删除文件` 支持序号。
+- **1.5.0**：工作区恢复 AstrBot 会话工作区；配额只统计上传文件；清理覆盖任务脚本。
+- **1.3.3**：初版。
